@@ -1,0 +1,63 @@
+version: "3.9"
+
+services:
+  # ----------------------------
+  # Database Postgres
+  # ----------------------------
+  db:
+    image: postgres:15
+    container_name: igfxpro-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: igfxpro_user
+      POSTGRES_PASSWORD: StrongPassword123!
+      POSTGRES_DB: igfxpro
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  # ----------------------------
+  # API Node + Prisma
+  # ----------------------------
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: igfxpro-api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://igfxpro_user:StrongPassword123!@db:5432/igfxpro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - db
+    command: >
+      sh -c "
+        npx prisma migrate deploy &&
+        node dist/main.js
+      "
+
+  # ----------------------------
+  # Seeding opzionale (una tantum)
+  # ----------------------------
+  seed:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: igfxpro-seed
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://igfxpro_user:StrongPassword123!@db:5432/igfxpro
+    depends_on:
+      - db
+    command: >
+      sh -c "
+        # run compiled seed JS from dist (src is not copied into production image)
+        node dist/seed.js
+      "
+    restart: "no"
+
+volumes:
+  db_data:
