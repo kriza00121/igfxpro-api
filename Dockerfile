@@ -1,21 +1,43 @@
-﻿# Dockerfile SICURO per Railway
+﻿# ----------------------
+# BUILD STAGE
+# ----------------------
+FROM node:18-alpine AS builder
+
+WORKDIR /app
+
+RUN apk add --no-cache openssl python3 make g++
+
+COPY package*.json ./
+COPY prisma ./prisma
+
+# installa TUTTO (dev + prod)
+RUN npm ci --legacy-peer-deps
+
+RUN npx prisma generate
+
+COPY . .
+
+RUN npm run build
+
+
+# ----------------------
+# PRODUCTION STAGE
+# ----------------------
 FROM node:18-alpine
 
 WORKDIR /app
 
-# 1. Copia file di dipendenze
 COPY package*.json ./
-COPY prisma ./prisma/
+COPY prisma ./prisma
 
-# 2. Installa dipendenze (SOLO produzione)
-RUN npm ci --only=production --legacy-peer-deps
+RUN npm ci --omit=dev --legacy-peer-deps
 
-# 3. Genera Prisma Client
-RUN npx prisma generate
+# Prisma client
+COPY --from=builder /app/node_modules/.prisma /app/node_modules/.prisma
+COPY --from=builder /app/node_modules/@prisma /app/node_modules/@prisma
 
-# 4. Copia il codice buildato (devi buildare PRIMA del deploy!)
-COPY dist ./dist
+# Build TS
+COPY --from=builder /app/dist ./dist
 
-# 5. Porta e avvio
 EXPOSE 3000
 CMD ["node", "dist/main.js"]
